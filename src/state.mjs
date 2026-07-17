@@ -110,7 +110,8 @@ export function saveState(cwd, state) {
 }
 
 /**
- * Acquire an exclusive lock file, run fn, then release.
+ * Acquire a simple exclusive lock using an atomic mkdir, run fn, then release.
+ * Falls back to a short retry loop if the lock is held.
  * @param {string} cwd
  * @param {() => T} fn
  * @returns {T}
@@ -119,19 +120,33 @@ export function saveState(cwd, state) {
 export function withStateLock(cwd, fn) {
   const stateFile = resolveStateFile(cwd);
   ensureDir(path.dirname(stateFile));
-  const lockFile = `${stateFile}.lock`;
-  const fd = fs.openSync(lockFile, "w");
+  const lockDir = `${stateFile}.lock`;
+
+  const start = Date.now();
+  const maxWait = 10000;
+  const retryDelay = 10;
+
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir, { recursive: false });
+      break;
+    } catch {
+      if (Date.now() - start > maxWait) {
+        throw new Error(`Timed out waiting for state lock: ${lockDir}`);
+      }
+      // Minimal busy-wait; acceptable for CLI use.
+      const now = Date.now();
+      while (Date.now() - now < retryDelay) {
+        // spin
+      }
+    }
+  }
+
   try {
-    fs.flockSync(fd, "ex");
     return fn();
   } finally {
     try {
-      fs.flockSync(fd, "un");
-    } catch {
-      // ignore
-    }
-    try {
-      fs.closeSync(fd);
+      fs.rmdirSync(lockDir);
     } catch {
       // ignore
     }

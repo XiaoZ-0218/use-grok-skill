@@ -43,7 +43,7 @@ export function renderReviewResult(parsed, meta = {}) {
   lines.push("");
 
   const findings = [...(parsed.findings ?? [])].sort(
-    (a, b) =
+    (a, b) =>
       (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99)
   );
 

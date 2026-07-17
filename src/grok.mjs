@@ -148,7 +148,12 @@ export async function runHeadlessAgent(cwd, prompt, options = {}) {
       cwd,
       timeoutMs: options.timeoutMs ?? 600000,
     });
-    resolve(proc);
+    resolve({
+      status: proc.status,
+      rawOutput: proc.stdout,
+      stdout: proc.stdout,
+      stderr: proc.stderr,
+    });
   });
 }
 

@@ -188,10 +188,10 @@ async function handleAsk(args) {
   });
 
   if (flags.json) {
-    outputResult({ status: result.status, output: result.stdout.trim() }, { json: true });
+    outputResult({ status: result.status, output: result.rawOutput.trim() }, { json: true });
   } else {
-    process.stdout.write(result.stdout);
-    if (!result.stdout.endsWith("\n")) process.stdout.write("\n");
+    process.stdout.write(result.rawOutput);
+    if (!result.rawOutput.endsWith("\n")) process.stdout.write("\n");
   }
 
   return result.status === 0 ? 0 : 1;
@@ -237,7 +237,7 @@ async function handleReview(args) {
   }
 
   const result = await runReview(cwd, prompt, commonGrokOptions(flags));
-  const output = result.stdout;
+  const output = result.rawOutput;
 
   if (flags.json) {
     outputResult({ status: result.status, output: output.trim() }, { json: true });
@@ -302,10 +302,10 @@ async function handleCritique(args) {
     jsonSchema: schemaPath,
   });
 
-  const parsed = parseStructuredOutput(result.stdout, null);
+  const parsed = parseStructuredOutput(result.rawOutput, null);
 
   if (flags.json) {
-    outputResult({ status: result.status, parsed, output: result.stdout.trim() }, { json: true });
+    outputResult({ status: result.status, parsed, output: result.rawOutput.trim() }, { json: true });
   } else {
     process.stdout.write(renderReviewResult(parsed));
   }
@@ -421,11 +421,19 @@ async function handleRuns(args) {
     if (!job) {
       throw new Error(`Run not found: ${jobId}`);
     }
-    outputResult(renderJobStatusReport(job), { json: flags.json });
+    if (flags.json) {
+      outputResult({ runId: job.id, status: job.status, job }, { json: true });
+    } else {
+      process.stdout.write(renderJobStatusReport(job));
+    }
     return 0;
   }
 
-  outputResult(renderStatusReport({ jobs }), { json: flags.json });
+  if (flags.json) {
+    outputResult({ jobs }, { json: true });
+  } else {
+    process.stdout.write(renderStatusReport({ jobs }));
+  }
   return 0;
 }
 
@@ -510,12 +518,12 @@ async function handleRunWorker(args) {
     const terminal = {
       status: result.status === 0 ? "completed" : "failed",
       phase: result.status === 0 ? "done" : "failed",
-      result,
+      result: { status: result.status, rawOutput: result.rawOutput, stderr: result.stderr },
       completedAt,
     };
 
     const rendered = request.kind === "critique"
-      ? renderReviewResult(parseStructuredOutput(result.stdout, null))
+      ? renderReviewResult(parseStructuredOutput(result.rawOutput, null))
       : renderTaskResult(result);
 
     upsertJob(workspaceRoot, { id: jobId, ...terminal, rendered });

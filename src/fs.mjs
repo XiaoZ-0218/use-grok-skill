@@ -92,6 +92,19 @@ export async function readStdinIfPiped() {
 }
 
 /**
+ * Append a line to a file, creating parent directories if needed.
+ * @param {string} filePath
+ * @param {string} line
+ */
+export function appendLogLine(filePath, line) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.appendFileSync(filePath, line, "utf8");
+}
+
+/**
  * Ensure a directory exists.
  * @param {string} dir
  */
