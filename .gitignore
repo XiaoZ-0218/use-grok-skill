@@ -1,0 +1,31 @@
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime state and temp files
+.tmp/
+tmp/
+*.tmp
+
+# Dependencies
+node_modules/
+
+# Coverage
+.coverage/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Pack output
+*.tgz
+
+# Test artifacts
+test-artifacts/

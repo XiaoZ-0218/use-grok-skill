@@ -1,0 +1,39 @@
+{
+  "name": "use-grok",
+  "version": "0.1.0",
+  "description": "Agent-agnostic CLI bridge to the Grok Build CLI (grok).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "bin": {
+    "use-grok": "bin/use-grok.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "prompts/",
+    "schemas/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "grok",
+    "xai",
+    "ai",
+    "agent",
+    "cli",
+    "code-review",
+    "delegation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
