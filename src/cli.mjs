@@ -64,7 +64,7 @@ Usage:
   use-grok review [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort <effort>] [--json]
   use-grok critique [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort <effort>] [--json] [focus...]
   use-grok run <prompt> [--background] [--write] [--model <model>] [--effort <effort>] [--json]
-  use-grok runs [run-id] [--wait] [--json]
+  use-grok runs [run-id] [--wait] [--all] [--timeout-ms <ms>] [--poll-interval-ms <ms>] [--json]
   use-grok show [run-id] [--json]
   use-grok stop [run-id] [--json]
 
