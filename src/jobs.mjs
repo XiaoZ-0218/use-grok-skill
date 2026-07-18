@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 import { appendLogLine as fsAppendLogLine, ensureDir } from "./fs.mjs";
@@ -256,7 +257,9 @@ export function enqueueBackgroundJob(cwd, job, request, options = {}) {
  * @returns {import("node:child_process").ChildProcess}
  */
 export function spawnDetachedRunWorker(cwd, jobId, options = {}) {
-  const scriptPath = options.scriptPath ?? new URL("../src/cli.mjs", import.meta.url).pathname;
+  // Spawn the package entrypoint (which self-executes main), not src/cli.mjs.
+  // fileURLToPath keeps paths with spaces intact (URL.pathname would %-encode them).
+  const scriptPath = options.scriptPath ?? fileURLToPath(new URL("../bin/use-grok.mjs", import.meta.url));
   const child = spawn(process.execPath, [scriptPath, "run-worker", "--cwd", cwd, "--job-id", jobId], {
     detached: true,
     stdio: ["ignore", "ignore", "ignore"],

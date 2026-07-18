@@ -1,6 +1,6 @@
 // Process spawning and cross-platform process-tree termination.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
 
 /**
@@ -21,14 +21,78 @@ export function runCommand(command, args, options = {}) {
     input: options.input,
     timeout: options.timeoutMs ?? 120000,
     encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    // Surface spawn errors (ENOENT, timeout, maxBuffer) instead of failing silently.
+    stderr: (result.stderr ?? "") + (result.error ? `\n${result.error.message}` : ""),
   };
+}
+
+/**
+ * Run a command asynchronously without blocking the event loop.
+ * Suitable for long-running commands (e.g. headless agent invocations).
+ * @param {string} command
+ * @param {string[]} args
+ * @param {object} options
+ * @param {string} [options.cwd]
+ * @param {object} [options.env]
+ * @param {number} [options.timeoutMs=120000]
+ * @param {number} [options.maxOutputChars] - cap per stream to bound memory
+ * @returns {Promise<{ status: number|null, stdout: string, stderr: string }>}
+ */
+export function runCommandAsync(command, args, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 120000;
+  const maxOutputChars = options.maxOutputChars ?? 16_000_000;
+
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+
+    const finish = (status) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ status, stdout, stderr });
+    };
+
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stderr += `\nCommand timed out after ${timeoutMs}ms`;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // Process may already be gone.
+      }
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      if (stdout.length < maxOutputChars) stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      if (stderr.length < maxOutputChars) stderr += chunk;
+    });
+    child.on("error", (error) => {
+      stderr += `\n${error.message}`;
+      finish(null);
+    });
+    child.on("close", (code) => {
+      finish(timedOut && code === 0 ? null : code);
+    });
+  });
 }
 
 /**

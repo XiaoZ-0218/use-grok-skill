@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runCommand, runCommandChecked, binaryAvailable } from "./process.mjs";
+import { runCommand, runCommandAsync, binaryAvailable } from "./process.mjs";
 import { safeReadFile } from "./fs.mjs";
 
 const GROK_BINARY_ENV = "GROK_BINARY";
@@ -143,18 +143,16 @@ export async function runHeadlessAgent(cwd, prompt, options = {}) {
     outputFormat: options.outputFormat ?? "plain",
   });
 
-  return new Promise((resolve) => {
-    const proc = runCommand(binary, args, {
-      cwd,
-      timeoutMs: options.timeoutMs ?? 600000,
-    });
-    resolve({
-      status: proc.status,
-      rawOutput: proc.stdout,
-      stdout: proc.stdout,
-      stderr: proc.stderr,
-    });
+  const proc = await runCommandAsync(binary, args, {
+    cwd,
+    timeoutMs: options.timeoutMs ?? 600000,
   });
+  return {
+    status: proc.status,
+    rawOutput: proc.stdout,
+    stdout: proc.stdout,
+    stderr: proc.stderr,
+  };
 }
 
 /**
@@ -241,9 +239,17 @@ export function parseStructuredOutput(rawOutput, fallback = undefined) {
   if (!rawOutput) {
     return fallback;
   }
+  const text = rawOutput.trim();
 
-  // Try fenced JSON block first.
-  const fenceMatch = rawOutput.match(/```(?:json)?\s*([\s\S]*?)```/);
+  // Fast path: the whole output is a JSON document.
+  try {
+    return JSON.parse(text);
+  } catch {
+    // fall through
+  }
+
+  // Try fenced JSON block.
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) {
     try {
       return JSON.parse(fenceMatch[1].trim());
@@ -252,13 +258,15 @@ export function parseStructuredOutput(rawOutput, fallback = undefined) {
     }
   }
 
-  // Try the last JSON object in the output.
-  const objectMatches = [...rawOutput.matchAll(/\{[\s\S]*?\}/g)];
-  for (let i = objectMatches.length - 1; i >= 0; i -= 1) {
-    try {
-      return JSON.parse(objectMatches[i][0]);
-    } catch {
-      // continue
+  // Scan for a JSON object, longest span first so nested objects parse whole.
+  const start = text.indexOf("{");
+  if (start >= 0) {
+    for (let end = text.lastIndexOf("}"); end > start; end = text.lastIndexOf("}", end - 1)) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        // try a shorter span
+      }
     }
   }
 
@@ -325,14 +333,4 @@ ${reviewInput}`;
 export function resolveSchemaPath(name) {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(__dirname, "..", "schemas", name);
-}
-
-/**
- * Resolve a prompt template path relative to the package root.
- * @param {string} name
- * @returns {string}
- */
-export function resolvePromptPath(name) {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(__dirname, "..", "prompts", name);
 }
