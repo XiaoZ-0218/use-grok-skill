@@ -1,18 +1,16 @@
 // CLI subcommand dispatcher and orchestration for use-grok.
 
 import fs from "node:fs";
-import path from "node:path";
 import process from "node:process";
 
 import { parseArgs } from "./args.mjs";
-import { ensureAbsolutePath, readJsonFile, safeReadFile } from "./fs.mjs";
+import { ensureAbsolutePath, readJsonFile } from "./fs.mjs";
 import {
   buildReviewPrompt,
   getGrokAuthStatus,
   getGrokAvailability,
   parseStructuredOutput,
   resolveGrokBinary,
-  resolvePromptPath,
   resolveSchemaPath,
   runAsk,
   runCritique,
@@ -31,13 +29,11 @@ import {
   enqueueBackgroundJob,
   loadBackgroundJob,
   nowIso,
-  resolveJobKillTargets,
   runTrackedJob,
   SESSION_ID_ENV,
   stopJob,
 } from "./jobs.mjs";
 import { loadPromptTemplate, interpolateTemplate, resolvePackageRoot } from "./prompts.mjs";
-import { runCommand } from "./process.mjs";
 import {
   renderCancelReport,
   renderJobStatusReport,
@@ -52,13 +48,10 @@ import {
   claimJobTerminal,
   isTerminalJobStatus,
   listJobs,
-  loadState,
   patchJobIfActive,
   resolveJobFile,
   resolveJobLogFile,
-  updateState,
   upsertJob,
-  withStateLock,
 } from "./state.mjs";
 import { resolveWorkspaceRoot } from "./workspace.mjs";
 
@@ -170,7 +163,11 @@ async function handleCheck(args) {
     },
   };
 
-  outputResult(report, { json: flags.json });
+  if (flags.json) {
+    outputResult(report, { json: true });
+  } else {
+    process.stdout.write(renderSetupReport(report));
+  }
   return report.ready ? 0 : 1;
 }
 
@@ -232,8 +229,21 @@ async function handleReview(args) {
     );
     createJobLogFile(workspaceRoot, job.id, title);
     enqueueBackgroundJob(cwd, job, { kind: "review", prompt, options: commonGrokOptions(flags) });
-    outputResult({ queued: true, runId: job.id, status: "queued" }, { json: flags.json });
-    return 0;
+    if (!flags.wait) {
+      outputResult({ queued: true, runId: job.id, status: "queued" }, { json: flags.json });
+      return 0;
+    }
+    const finalJob = await waitForJobTerminal(cwd, job.id);
+    const finalOutput = finalJob.result?.rawOutput ?? "";
+    if (flags.json) {
+      outputResult(
+        { status: finalJob.status === "completed" ? 0 : 1, runId: job.id, output: finalOutput.trim() },
+        { json: true }
+      );
+    } else {
+      process.stdout.write(renderNativeReviewResult(finalOutput));
+    }
+    return finalJob.status === "completed" ? 0 : 1;
   }
 
   const result = await runReview(cwd, prompt, commonGrokOptions(flags));
@@ -293,8 +303,27 @@ async function handleCritique(args) {
       prompt,
       options: { ...commonGrokOptions(flags), jsonSchema: schemaPath },
     });
-    outputResult({ queued: true, runId: job.id, status: "queued" }, { json: flags.json });
-    return 0;
+    if (!flags.wait) {
+      outputResult({ queued: true, runId: job.id, status: "queued" }, { json: flags.json });
+      return 0;
+    }
+    const finalJob = await waitForJobTerminal(cwd, job.id);
+    const finalOutput = finalJob.result?.rawOutput ?? "";
+    const finalParsed = parseStructuredOutput(finalOutput, null);
+    if (flags.json) {
+      outputResult(
+        {
+          status: finalJob.status === "completed" ? 0 : 1,
+          runId: job.id,
+          parsed: finalParsed,
+          output: finalOutput.trim(),
+        },
+        { json: true }
+      );
+    } else {
+      process.stdout.write(renderReviewResult(finalParsed));
+    }
+    return finalJob.status === "completed" ? 0 : 1;
   }
 
   const result = await runCritique(cwd, prompt, {
@@ -550,6 +579,29 @@ async function handleRunWorker(args) {
 // ---------------------------------------------------------------------------
 // Job lookup helper
 // ---------------------------------------------------------------------------
+
+/**
+ * Poll the state store until a job reaches a terminal status.
+ * @param {string} cwd
+ * @param {string} jobId
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs=600000]
+ * @param {number} [options.intervalMs=1000]
+ * @returns {Promise<any>}
+ */
+async function waitForJobTerminal(cwd, jobId, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 600000;
+  const intervalMs = options.intervalMs ?? 1000;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const job = listJobs(cwd).find((j) => j.id === jobId);
+    if (job && isTerminalJobStatus(job.status)) {
+      return job;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Timed out waiting for run ${jobId}`);
+}
 
 function findJob(cwd, jobId, sessionId, options = {}) {
   const jobs = listJobs(cwd);

@@ -76,22 +76,6 @@ export function isProbablyText(buffer) {
 }
 
 /**
- * Read stdin if it is piped; otherwise return undefined.
- * @returns {Promise<string|undefined>}
- */
-export async function readStdinIfPiped() {
-  if (process.stdin.isTTY) {
-    return undefined;
-  }
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  return raw || undefined;
-}
-
-/**
  * Append a line to a file, creating parent directories if needed.
  * @param {string} filePath
  * @param {string} line
