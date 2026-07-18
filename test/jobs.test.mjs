@@ -70,7 +70,10 @@ describe("jobs", () => {
 
       const stop = runCli(["stop", runId, "--json"], { cwd: dir, env });
       assert.strictEqual(stop.status, 0, stop.stderr);
-      assert.match(JSON.parse(stop.stdout), /Stopped run/);
+      const stopped = JSON.parse(stop.stdout);
+      assert.strictEqual(stopped.status, 0);
+      assert.strictEqual(stopped.runId, runId);
+      assert.strictEqual(stopped.stopped, true);
 
       const status = runCli(["runs", runId, "--json"], { cwd: dir, env });
       assert.strictEqual(JSON.parse(status.stdout).status, "cancelled");

@@ -500,7 +500,11 @@ async function handleStop(args) {
   }
 
   const stopped = stopJob(cwd, job);
-  outputResult(renderCancelReport(stopped), { json: flags.json });
+  if (flags.json) {
+    outputResult({ status: 0, runId: job.id, stopped: true }, { json: true });
+  } else {
+    outputResult(renderCancelReport(stopped), { json: false });
+  }
   return 0;
 }
 
