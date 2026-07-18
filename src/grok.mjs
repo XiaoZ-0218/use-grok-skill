@@ -68,12 +68,11 @@ export function getGrokAuthStatus(cwd, options = {}) {
 
 /**
  * Build common spawn arguments for a headless Grok agent invocation.
- * @param {string} binary
  * @param {string} prompt
  * @param {object} options
  * @returns {string[]}
  */
-function buildGrokArgs(binary, prompt, options = {}) {
+function buildGrokArgs(prompt, options = {}) {
   const args = [];
 
   // Prompt can be passed via stdin or -p. We prefer -p for clarity.
@@ -137,7 +136,7 @@ function buildGrokArgs(binary, prompt, options = {}) {
  */
 export async function runHeadlessAgent(cwd, prompt, options = {}) {
   const binary = options.binary ?? resolveGrokBinary();
-  const args = buildGrokArgs(binary, prompt, {
+  const args = buildGrokArgs(prompt, {
     cwd,
     ...options,
     outputFormat: options.outputFormat ?? "plain",
