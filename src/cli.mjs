@@ -575,10 +575,19 @@ async function handleRunWorker(args) {
     return result.status === 0 ? 0 : 1;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    claimJobTerminal(workspaceRoot, jobId, "failed", {
+    const completedAt = nowIso();
+    const errorPatch = {
       errorMessage: message,
       phase: "failed",
-      completedAt: nowIso(),
+      completedAt,
+    };
+    claimJobTerminal(workspaceRoot, jobId, "failed", errorPatch);
+    // Keep the per-job file in sync so `show` reflects the failure.
+    writeJobFile(workspaceRoot, jobId, {
+      ...stored,
+      status: "failed",
+      ...errorPatch,
+      updatedAt: completedAt,
     });
     if (logFile) {
       fs.appendFileSync(logFile, `\n## Error\n\n${message}\n`, "utf8");
