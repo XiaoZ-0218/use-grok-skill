@@ -55,8 +55,7 @@ export function parseArgs(argv, config = {}) {
       } else if (booleanOptions.has(key) || unknownMode !== "error") {
         flags[key] = true;
       } else {
-        // Treat unknown long flags without value as booleans if no config is provided.
-        flags[key] = true;
+        throw new Error(`Unknown option: --${key}`);
       }
       i += 1;
       continue;
