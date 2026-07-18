@@ -1,6 +1,6 @@
 ---
 name: use-grok
-description: Delegate code review, adversarial design critique, and implementation tasks to the Grok Build CLI (`grok`) from any agent. Use when the user wants a Grok second opinion, an independent review of working-tree or branch changes, a ship/no-ship risk critique before merging, or a task implemented by Grok.
+description: Delegate tasks to the Grok Build CLI (`grok`). Trigger whenever the user mentions Grok in any form — "用 grok xxx", "让 grok xxx", "grok review", "grok ask", "grok run", "grok critique", or any other request that involves Grok. When triggered, route the request to the appropriate use-grok subcommand.
 ---
 
 # use-grok
