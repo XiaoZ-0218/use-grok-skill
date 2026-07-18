@@ -41,7 +41,8 @@ export function runCommand(command, args, options = {}) {
  * @param {object} options
  * @param {string} [options.cwd]
  * @param {object} [options.env]
- * @param {number} [options.timeoutMs=120000]
+ * @param {number} [options.timeoutMs=120000] - on timeout the process is
+ *   SIGTERM-ed and the result resolves with status 124 plus a stderr note
  * @param {number} [options.maxOutputChars] - cap per stream to bound memory
  * @returns {Promise<{ status: number|null, stdout: string, stderr: string }>}
  */
@@ -71,7 +72,6 @@ export function runCommandAsync(command, args, options = {}) {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      stderr += `\nCommand timed out after ${timeoutMs}ms`;
       try {
         child.kill("SIGTERM");
       } catch {
@@ -90,7 +90,15 @@ export function runCommandAsync(command, args, options = {}) {
       finish(null);
     });
     child.on("close", (code) => {
-      finish(timedOut && code === 0 ? null : code);
+      if (timedOut) {
+        // Surface the timeout on stderr (appending here, before settle, so it
+        // is never lost) and fail with a definite non-zero status — 124, the
+        // conventional timeout exit code — instead of a silent `status: null`.
+        stderr += `\nCommand timed out after ${timeoutMs}ms`;
+        finish(124);
+        return;
+      }
+      finish(code);
     });
   });
 }
@@ -149,8 +157,9 @@ export function formatCommandFailure({ command, args, result }) {
  * @param {number} pid
  * @param {object} [options]
  * @param {number} [options.signal="SIGTERM"]
+ * @returns {Promise<void>}
  */
-export function terminateProcessTree(pid, options = {}) {
+export async function terminateProcessTree(pid, options = {}) {
   if (!pid || pid <= 0) {
     return;
   }
@@ -171,7 +180,8 @@ export function terminateProcessTree(pid, options = {}) {
     }
   }
 
-  // Give it a moment, then SIGKILL if still alive.
+  // Give it a moment, then SIGKILL if still alive. Poll asynchronously so
+  // the event loop is not blocked during the grace period.
   const deadline = Date.now() + 500;
   while (Date.now() < deadline) {
     try {
@@ -179,6 +189,7 @@ export function terminateProcessTree(pid, options = {}) {
     } catch {
       return;
     }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   try {

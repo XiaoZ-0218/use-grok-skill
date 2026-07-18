@@ -499,7 +499,7 @@ async function handleStop(args) {
     throw new Error(`No active run found: ${jobId ?? "(latest)"}`);
   }
 
-  const stopped = stopJob(cwd, job);
+  const stopped = await stopJob(cwd, job);
   if (flags.json) {
     outputResult({ status: 0, runId: job.id, stopped: true }, { json: true });
   } else {

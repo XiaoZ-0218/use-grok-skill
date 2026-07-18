@@ -287,12 +287,12 @@ export function loadBackgroundJob(cwd, jobId) {
  * Stop an active job by killing its tracked process tree.
  * @param {string} cwd
  * @param {any} job
- * @returns {any}
+ * @returns {Promise<any>}
  */
-export function stopJob(cwd, job) {
+export async function stopJob(cwd, job) {
   for (const pid of resolveJobKillTargets(job)) {
     try {
-      terminateProcessTree(pid);
+      await terminateProcessTree(pid);
     } catch {
       // ignore
     }

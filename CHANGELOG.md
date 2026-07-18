@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `stop --json` printed a bare string instead of structured JSON; it now returns a `{ status, runId, stopped }` object like the other commands.
+- `terminateProcessTree` spin-waited synchronously for up to 500ms after SIGTERM, blocking the event loop; it now polls asynchronously and `stopJob`/`stop` await it.
+- `runCommandAsync` timeouts appended "timed out" to stderr after the promise had already settled (silently dropping the message) and could resolve with `status: null`; the timeout note is now appended before settling and timeouts resolve with a definite failure status (124).
 - Background jobs never executed: the worker spawned `src/cli.mjs`, which has no self-executing entry, via a percent-encoded `URL.pathname`. It now spawns `bin/use-grok.mjs` resolved through `fileURLToPath`.
 - `use-grok check` printed raw JSON in human mode; it now renders the human-readable setup report.
 - `parseStructuredOutput` failed on nested pretty-printed JSON.
