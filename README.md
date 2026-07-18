@@ -18,10 +18,10 @@ Agent-agnostic CLI bridge to the [Grok Build CLI](https://x.ai) (`grok`).
 
 ```bash
 # Run without installing
-npx use-grok check
+npx github:XiaoZ-0218/use-grok-skill check
 
 # Or install globally
-npm install -g use-grok
+npm install -g github:XiaoZ-0218/use-grok-skill
 use-grok check
 ```
 
@@ -111,8 +111,8 @@ Pass `--json` to any command to receive machine-parseable output. This is especi
 ## Development
 
 ```bash
-git clone <your-repo-url>
-cd use-grok
+git clone https://github.com/XiaoZ-0218/use-grok-skill.git
+cd use-grok-skill
 npm test
 ```
 

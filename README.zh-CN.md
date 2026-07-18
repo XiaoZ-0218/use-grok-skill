@@ -18,10 +18,10 @@ Agent 无关的 CLI 桥接工具，用于对接 [Grok Build CLI](https://x.ai) (
 
 ```bash
 # 无需安装即可运行
-npx use-grok check
+npx github:XiaoZ-0218/use-grok-skill check
 
 # 或全局安装
-npm install -g use-grok
+npm install -g github:XiaoZ-0218/use-grok-skill
 use-grok check
 ```
 
@@ -111,8 +111,8 @@ use-grok run "应用最佳修复方案" --write
 ## 开发
 
 ```bash
-git clone <your-repo-url>
-cd use-grok
+git clone https://github.com/XiaoZ-0218/use-grok-skill.git
+cd use-grok-skill
 npm test
 ```
 
