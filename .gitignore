@@ -32,3 +32,6 @@ test-artifacts/
 
 # Review documents (generated, not for commit)
 REVIEW.md
+
+# Lock file (library/CLI, no need to commit)
+package-lock.json
