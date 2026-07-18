@@ -52,6 +52,7 @@ import {
   resolveJobFile,
   resolveJobLogFile,
   upsertJob,
+  writeJobFile,
 } from "./state.mjs";
 import { resolveWorkspaceRoot } from "./workspace.mjs";
 
@@ -560,6 +561,15 @@ async function handleRunWorker(args) {
       : renderTaskResult(result);
 
     upsertJob(workspaceRoot, { id: jobId, ...terminal, rendered });
+    // Keep the per-job file in sync with state.json: it was written at
+    // enqueue time and never updated, so `show` could not see the final
+    // result from it. Preserve the original request payload.
+    writeJobFile(workspaceRoot, jobId, {
+      ...stored,
+      ...terminal,
+      rendered,
+      updatedAt: completedAt,
+    });
 
     if (logFile) {
       fs.appendFileSync(logFile, `\n## Output\n\n${result.stdout}\n`, "utf8");
