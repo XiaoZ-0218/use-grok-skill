@@ -416,26 +416,18 @@ async function handleRuns(args) {
     booleanOptions: ["wait", "all", "json"],
   });
   const cwd = resolveCommandCwd(flags);
-  const workspaceRoot = resolveCommandWorkspace(flags);
   const sessionId = process.env[SESSION_ID_ENV];
 
   let jobId = positionals[0];
 
   if (jobId && flags.wait) {
-    const deadline = Date.now() + (Number(flags["timeout-ms"]) || 300000);
-    const interval = Number(flags["poll-interval-ms"]) || 1000;
-    while (Date.now() < deadline) {
-      const job = findJob(cwd, jobId, sessionId);
-      if (!job) {
-        throw new Error(`Run not found: ${jobId}`);
-      }
-      if (isTerminalJobStatus(job.status)) {
-        outputResult({ runId: job.id, status: job.status, job }, { json: flags.json });
-        return job.status === "completed" ? 0 : 1;
-      }
-      await new Promise((r) => setTimeout(r, interval));
-    }
-    throw new Error(`Timed out waiting for run ${jobId}`);
+    const finalJob = await waitForJobTerminal(cwd, jobId, {
+      timeoutMs: Number(flags["timeout-ms"]) || 300000,
+      intervalMs: Number(flags["poll-interval-ms"]) || 1000,
+      sessionId,
+    });
+    outputResult({ runId: finalJob.id, status: finalJob.status, job: finalJob }, { json: flags.json });
+    return finalJob.status === "completed" ? 0 : 1;
   }
 
   let jobs = listJobs(cwd);
@@ -607,14 +599,18 @@ async function handleRunWorker(args) {
  * @param {object} [options]
  * @param {number} [options.timeoutMs=600000]
  * @param {number} [options.intervalMs=1000]
+ * @param {string} [options.sessionId]
  * @returns {Promise<any>}
  */
 async function waitForJobTerminal(cwd, jobId, options = {}) {
   const timeoutMs = options.timeoutMs ?? 600000;
   const intervalMs = options.intervalMs ?? 1000;
+  const sessionId = options.sessionId;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const job = listJobs(cwd).find((j) => j.id === jobId);
+    const job = listJobs(cwd).find((j) =>
+      j.id === jobId && (!sessionId || j.sessionId === sessionId)
+    );
     if (job && isTerminalJobStatus(job.status)) {
       return job;
     }
