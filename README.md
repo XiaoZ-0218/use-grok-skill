@@ -1,5 +1,7 @@
 # use-grok
 
+**English** | [简体中文](./README.zh-CN.md)
+
 Agent-agnostic CLI bridge to the [Grok Build CLI](https://x.ai) (`grok`).
 
 `use-grok` lets any AI agent, IDE extension, shell script, or CI pipeline call Grok for code review, design critique, and delegated implementation — without requiring Claude Code or any specific editor plugin.
