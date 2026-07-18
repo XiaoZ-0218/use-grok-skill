@@ -29,3 +29,6 @@ Thumbs.db
 
 # Test artifacts
 test-artifacts/
+
+# Review documents (generated, not for commit)
+REVIEW.md
