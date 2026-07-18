@@ -14,6 +14,19 @@ const STATE_DIR_ENV = "USE_GROK_STATE_DIR";
 const DEFAULT_STATE_BASE = "use-grok-runs";
 const MAX_JOBS = 50;
 
+// Shared buffer for Atomics.wait-based sleeping in the lock retry loop.
+// Node.js (unlike browsers) permits Atomics.wait on the main thread, so this
+// blocks for at most the given timeout without burning CPU.
+const ATOMICS_SLEEP_VIEW = new Int32Array(new SharedArrayBuffer(4));
+
+/**
+ * Sleep synchronously without spinning, via Atomics.wait.
+ * @param {number} ms
+ */
+function sleepSync(ms) {
+  Atomics.wait(ATOMICS_SLEEP_VIEW, 0, 0, ms);
+}
+
 /**
  * Generate a short slug from a directory path for state directory naming.
  * @param {string} workspaceRoot
@@ -44,6 +57,27 @@ export function resolveStateDir(cwd) {
   const slug = workspaceSlug(workspaceRoot);
   const hash = workspaceHash(workspaceRoot);
   return path.join(base, `${slug}-${hash}`);
+}
+
+/**
+ * Ensure the state directory exists with owner-only permissions (0o700).
+ * Job payloads and outputs may contain sensitive code context, so the
+ * directory is kept private even though the default base is os.tmpdir().
+ * Applied to pre-existing directories too. Best-effort: chmod is
+ * unsupported or meaningless on some platforms (e.g. Windows), where
+ * failures are ignored.
+ * @param {string} cwd
+ * @returns {string} the state directory path
+ */
+function ensureStateDir(cwd) {
+  const stateDir = resolveStateDir(cwd);
+  ensureDir(stateDir);
+  try {
+    fs.chmodSync(stateDir, 0o700);
+  } catch {
+    // Windows and some filesystems do not support POSIX permissions.
+  }
+  return stateDir;
 }
 
 /**
@@ -105,7 +139,7 @@ export function loadState(cwd) {
  */
 export function saveState(cwd, state) {
   const stateFile = resolveStateFile(cwd);
-  ensureDir(path.dirname(stateFile));
+  ensureStateDir(cwd);
   writeJsonFile(stateFile, state);
 }
 
@@ -119,7 +153,7 @@ export function saveState(cwd, state) {
  */
 export function withStateLock(cwd, fn) {
   const stateFile = resolveStateFile(cwd);
-  ensureDir(path.dirname(stateFile));
+  ensureStateDir(cwd);
   const lockDir = `${stateFile}.lock`;
 
   const start = Date.now();
@@ -134,11 +168,10 @@ export function withStateLock(cwd, fn) {
       if (Date.now() - start > maxWait) {
         throw new Error(`Timed out waiting for state lock: ${lockDir}`);
       }
-      // Minimal busy-wait; acceptable for CLI use.
-      const now = Date.now();
-      while (Date.now() - now < retryDelay) {
-        // spin
-      }
+      // Wait without spinning: Atomics.wait blocks the thread for up to
+      // retryDelay ms without burning CPU (allowed on the Node.js main
+      // thread, unlike browsers).
+      sleepSync(retryDelay);
     }
   }
 
@@ -202,6 +235,9 @@ export function readJobFile(jobFile) {
  */
 export function writeJobFile(cwd, jobId, payload) {
   const file = resolveJobFile(cwd, jobId);
+  // Job files live inside the state directory; tighten it first since the
+  // payload may contain sensitive prompt/output data.
+  ensureStateDir(cwd);
   ensureDir(path.dirname(file));
   writeJsonFile(file, payload);
 }
