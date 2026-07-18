@@ -228,7 +228,6 @@ async function handleReview(args) {
       },
       { workspaceRoot, ...commonGrokOptions(flags) }
     );
-    createJobLogFile(workspaceRoot, job.id, title);
     enqueueBackgroundJob(cwd, job, { kind: "review", prompt, options: commonGrokOptions(flags) });
     if (!flags.wait) {
       outputResult({ queued: true, runId: job.id, status: "queued" }, { json: flags.json });
@@ -298,7 +297,6 @@ async function handleCritique(args) {
       },
       { workspaceRoot, ...commonGrokOptions(flags) }
     );
-    createJobLogFile(workspaceRoot, job.id, title);
     enqueueBackgroundJob(cwd, job, {
       kind: "critique",
       prompt,
@@ -366,7 +364,6 @@ async function handleRun(args) {
       },
       { workspaceRoot, write: flags.write, ...commonGrokOptions(flags) }
     );
-    createJobLogFile(workspaceRoot, job.id, title);
     enqueueBackgroundJob(cwd, job, {
       kind: "run",
       prompt,
