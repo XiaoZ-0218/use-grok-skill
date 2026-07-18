@@ -39,8 +39,15 @@ if (args[0] === "login" || args[0] === "logout") {
 
 const prompt = getPrompt();
 const outputFormat = findArg("--output-format") ?? "plain";
+const jsonSchema = findArg("--json-schema");
 const model = findArg("--model");
 const effort = findArg("--effort");
+
+// Optional delay so tests can observe/stop in-flight background jobs.
+const sleepMs = Number(process.env.USE_GROK_TEST_SLEEP_MS) || 0;
+if (sleepMs > 0) {
+  await new Promise((resolve) => setTimeout(resolve, sleepMs));
+}
 
 // Echo model/effort selection to stderr so tests can assert it.
 if (model) {
@@ -51,7 +58,7 @@ if (effort) {
 }
 
 if (outputFormat === "json") {
-  if (prompt.includes("CRITIQUE")) {
+  if (jsonSchema) {
     console.log(
       JSON.stringify(
         {

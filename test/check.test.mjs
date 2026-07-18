@@ -26,6 +26,6 @@ describe("check", () => {
   it("prints human-readable output by default", () => {
     const result = runCli(["check"], { env: fakeGrokEnv() });
     assert.strictEqual(result.status, 0);
-    assert.match(result.stdout, /ready/i);
+    assert.match(result.stdout, /Grok is ready/);
   });
 });
