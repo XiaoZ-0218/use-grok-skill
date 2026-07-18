@@ -1,6 +1,10 @@
 // Git helpers for resolving review targets and collecting diff context.
 
+import fs from "node:fs";
+import path from "node:path";
+
 import { runCommand, runCommandChecked } from "./process.mjs";
+import { isProbablyText } from "./fs.mjs";
 
 const DIFF_BYTE_LIMIT = 200_000;
 const DIFF_FILE_LIMIT = 200;
@@ -14,15 +18,6 @@ export function ensureGitRepository(cwd) {
   if (result.status !== 0) {
     throw new Error("Not a git repository");
   }
-}
-
-/**
- * Get the git repository root.
- * @param {string} cwd
- * @returns {string}
- */
-export function getRepoRoot(cwd) {
-  return runCommandChecked("git", ["rev-parse", "--show-toplevel"], { cwd }).trim();
 }
 
 /**
@@ -128,27 +123,7 @@ function measureGitOutputBytes(cwd, args) {
  */
 export function collectReviewContext(cwd, target) {
   if (target.mode === "working-tree") {
-    const diffArgs = ["diff", "--", "."];
-    const diff = runCommandChecked("git", diffArgs, { cwd });
-    const byteCount = Buffer.byteLength(diff, "utf8");
-    const fileCount = runCommandChecked("git", ["diff", "--name-only", "--", "."], { cwd })
-      .trim()
-      .split("\n")
-      .filter(Boolean).length;
-
-    if (byteCount > DIFF_BYTE_LIMIT || fileCount > DIFF_FILE_LIMIT) {
-      return {
-        input: `The working tree diff is too large to embed (${fileCount} files, ${byteCount} bytes). Please ask the user to narrow the scope or review locally.`,
-        fileCount,
-        byteCount,
-      };
-    }
-
-    return {
-      input: `Working tree diff:\n\n\`\`\`diff\n${diff}\n\`\`\``,
-      fileCount,
-      byteCount,
-    };
+    return collectWorkingTreeContext(cwd);
   }
 
   const range = `${target.base}...HEAD`;
@@ -173,4 +148,77 @@ export function collectReviewContext(cwd, target) {
     fileCount,
     byteCount,
   };
+}
+
+/**
+ * Collect working tree context: staged + unstaged changes to tracked files,
+ * plus the contents of untracked files (new files are invisible to git diff).
+ * @param {string} cwd
+ * @returns {{ input: string, fileCount: number, byteCount: number }}
+ */
+function collectWorkingTreeContext(cwd) {
+  // A repo without any commit has no HEAD to diff against; everything is staged.
+  const hasHead = runCommand("git", ["rev-parse", "--verify", "HEAD"], { cwd }).status === 0;
+  const baseArgs = hasHead ? ["HEAD"] : ["--cached"];
+
+  const diff = runCommandChecked("git", ["diff", ...baseArgs, "--", "."], { cwd });
+  const trackedFiles = runCommandChecked("git", ["diff", "--name-only", ...baseArgs, "--", "."], { cwd })
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const untrackedFiles = runCommandChecked(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "--", "."],
+    { cwd }
+  )
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+
+  // Read untracked files once; reuse for both the size guard and the prompt.
+  const untracked = [];
+  for (const name of untrackedFiles) {
+    let buffer;
+    try {
+      buffer = fs.readFileSync(path.resolve(cwd, name));
+    } catch {
+      untracked.push({ name, content: null, note: "unreadable" });
+      continue;
+    }
+    if (!isProbablyText(buffer)) {
+      untracked.push({ name, content: null, note: "binary file, not shown" });
+      continue;
+    }
+    untracked.push({ name, content: buffer.toString("utf8") });
+  }
+
+  const fileCount = trackedFiles.length + untrackedFiles.length;
+  const byteCount =
+    Buffer.byteLength(diff, "utf8") +
+    untracked.reduce((sum, f) => sum + (f.content ? Buffer.byteLength(f.content, "utf8") : 0), 0);
+
+  if (byteCount > DIFF_BYTE_LIMIT || fileCount > DIFF_FILE_LIMIT) {
+    return {
+      input: `The working tree changes are too large to embed (${fileCount} files, ${byteCount} bytes). Please ask the user to narrow the scope or review locally.`,
+      fileCount,
+      byteCount,
+    };
+  }
+
+  const sections = [];
+  if (diff.trim()) {
+    sections.push(`Working tree diff (staged and unstaged):\n\n\`\`\`diff\n${diff}\n\`\`\``);
+  }
+  for (const file of untracked) {
+    if (file.content === null) {
+      sections.push(`New untracked file \`${file.name}\` (${file.note}).`);
+    } else {
+      sections.push(`New untracked file \`${file.name}\`:\n\n\`\`\`\n${file.content}\n\`\`\``);
+    }
+  }
+  if (sections.length === 0) {
+    sections.push("The working tree has no textual changes to review.");
+  }
+
+  return { input: sections.join("\n\n"), fileCount, byteCount };
 }
