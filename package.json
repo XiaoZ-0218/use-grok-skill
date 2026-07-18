@@ -4,7 +4,7 @@
   "description": "Agent-agnostic CLI bridge to the Grok Build CLI (grok).",
   "type": "module",
   "license": "Apache-2.0",
-  "author": "",
+  "author": "XiaoZ-0218 <xiao.z.218@qq.com>",
   "engines": {
     "node": ">=18.18.0"
   },
@@ -35,6 +35,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/XiaoZ-0218/use-grok.git"
   }
 }
