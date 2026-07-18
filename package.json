@@ -16,6 +16,7 @@
     "src/",
     "prompts/",
     "schemas/",
+    "SKILL.md",
     "LICENSE",
     "README.md",
     "CHANGELOG.md"

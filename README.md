@@ -57,7 +57,7 @@ Single-turn ask. Returns Grok's plain-text response (or JSON with `--json`).
 
 ### `use-grok review [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort low|medium|high] [--json]`
 
-Read-only review of local git state. Defaults to the working tree if there are uncommitted changes, otherwise the current branch versus the default base.
+Read-only review of local git state. Defaults to the working tree if there are uncommitted changes, otherwise the current branch versus the default base. The working-tree scope covers staged, unstaged, and untracked changes.
 
 ### `use-grok critique [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort low|medium|high] [--json] [focus...]`
 
@@ -90,7 +90,11 @@ Stop an active run and its tracked process tree.
 
 ## Background jobs
 
-Long-running `review`, `critique`, and `run` commands can be queued in the background with `--background`. The CLI stores job metadata and logs under the workspace state directory and you can manage them with `runs`, `show`, and `stop`.
+Long-running `review`, `critique`, and `run` commands can be queued in the background with `--background`. The CLI stores job metadata and logs under the workspace state directory and you can manage them with `runs`, `show`, and `stop`. For `review` and `critique`, adding `--wait` blocks until the background run finishes and prints the final result.
+
+## Agent skill
+
+This repository doubles as an agent skill: [SKILL.md](./SKILL.md) contains the usage instructions an agent needs to drive the CLI. Copy or symlink this directory into your agent's skills path (for example `~/.agents/skills/use-grok/`) to register it.
 
 ## JSON output
 
@@ -100,7 +104,7 @@ Pass `--json` to any command to receive machine-parseable output. This is especi
 
 - `0` — success
 - `1` — error, failed run, or cancelled run
-- `2` — usage error
+- `2` — unknown command
 
 ## Development
 

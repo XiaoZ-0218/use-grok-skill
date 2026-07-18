@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `SKILL.md` so the package can be installed as an agent skill.
+- `review` and `critique` honor `--wait` together with `--background`: block until the run finishes and print the final result.
+- Working-tree review context now includes staged changes and untracked file contents (previously only unstaged tracked diffs, so freshly `git add`-ed files were reviewed as an empty diff).
+- Tests for `critique`, background job completion and stop, and staged/untracked review context.
+
+### Fixed
+
+- Background jobs never executed: the worker spawned `src/cli.mjs`, which has no self-executing entry, via a percent-encoded `URL.pathname`. It now spawns `bin/use-grok.mjs` resolved through `fileURLToPath`.
+- `use-grok check` printed raw JSON in human mode; it now renders the human-readable setup report.
+- `parseStructuredOutput` failed on nested pretty-printed JSON.
+- Headless Grok invocations no longer block the event loop, and spawn errors/timeouts are surfaced on stderr instead of failing silently.
+- Removed unused imports and dead exports.
+
 ## [0.1.0] - 2026-07-17
 
 ### Added
