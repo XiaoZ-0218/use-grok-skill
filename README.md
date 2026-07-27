@@ -4,7 +4,7 @@
 
 Agent-agnostic CLI bridge to the [Grok Build CLI](https://x.ai) (`grok`).
 
-`use-grok` lets any AI agent, IDE extension, shell script, or CI pipeline call Grok for code review, design critique, and delegated implementation — without requiring Claude Code or any specific editor plugin.
+`use-grok` lets any AI agent, IDE extension, shell script, or CI pipeline call Grok for code review, design critique, delegated implementation, and image generation/editing — without requiring Claude Code or any specific editor plugin.
 
 > Inspired by the [`grok-build-plugin-cc`](https://github.com/xai-org/grok-build-plugin-cc) Claude Code plugin. This package takes the same core ideas and exposes them as a plain `npx use-grok` command that works everywhere.
 
@@ -45,6 +45,12 @@ use-grok run "Fix the flaky test in auth"
 
 # Allow Grok to edit files
 use-grok run "Apply the top fix" --write
+
+# Generate an image with Grok
+use-grok image "A flat-style illustration of a rocket over a city skyline" --out rocket.png --aspect-ratio 16:9
+
+# Edit an existing image
+use-grok image "Turn the sky into a sunset" --ref rocket.png --out rocket-sunset.png
 ```
 
 ## Commands
@@ -69,6 +75,12 @@ Adversarial design/risk critique with structured JSON output when possible. Any 
 
 Delegate a task to Grok. By default the run is read-only (`--permission-mode plan --sandbox read-only`). Pass `--write` to let Grok edit files.
 
+### `use-grok image <prompt> [--out <path>] [--aspect-ratio <ratio>] [--ref <image>...] [--background] [--wait] [--model <model>] [--effort low|medium|high] [--json]`
+
+Generate an image with Grok's built-in `image_gen` tool, or edit existing images with `image_edit` when one or more `--ref` images are given. The final image is saved to `--out` (default `./grok-image-<timestamp>.png`); `--json` output includes the `out` path. Supported aspect ratios: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `auto`.
+
+Because the image tools write files, this command always runs Grok with write permission (like `run --write`). Grok is instructed to write only the requested `--out` file, but that is prompt guidance, not a sandbox restriction. The command verifies the `--out` file exists and is non-empty after the run and fails otherwise.
+
 ### `use-grok runs [run-id] [--wait] [--json]`
 
 List active and recent runs, or wait for a specific run to finish.
@@ -92,7 +104,7 @@ Stop an active run and its tracked process tree.
 
 ## Background jobs
 
-Long-running `review`, `critique`, and `run` commands can be queued in the background with `--background`. The CLI stores job metadata and logs under the workspace state directory and you can manage them with `runs`, `show`, and `stop`. For `review` and `critique`, adding `--wait` blocks until the background run finishes and prints the final result.
+Long-running `review`, `critique`, `image`, and `run` commands can be queued in the background with `--background`. The CLI stores job metadata and logs under the workspace state directory and you can manage them with `runs`, `show`, and `stop`. For `review`, `critique`, and `image`, adding `--wait` blocks until the background run finishes and prints the final result.
 
 ## Agent skill
 

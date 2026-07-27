@@ -2,6 +2,8 @@
 
 // Fake grok binary for testing use-grok without a real Grok account.
 
+import fs from "node:fs";
+import path from "node:path";
 import process from "node:process";
 
 const args = process.argv.slice(2);
@@ -88,9 +90,28 @@ if (outputFormat === "json") {
   process.exit(0);
 }
 
+// Simulate the image tools: when the prompt asks to save the result to an
+// exact path, write a small file there (unless the test opts out).
+if (process.env.USE_GROK_TEST_SKIP_WRITE !== "1") {
+  const marker = "copy or move the resulting image file to this exact path";
+  const markerIndex = prompt.indexOf(marker);
+  if (markerIndex >= 0) {
+    const outLine = prompt
+      .slice(markerIndex + marker.length)
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0 && !line.startsWith("("));
+    if (outLine) {
+      fs.mkdirSync(path.dirname(outLine), { recursive: true });
+      fs.writeFileSync(outLine, "fake image data");
+    }
+  }
+}
+
 const meta = [];
 if (model) meta.push(`model=${model}`);
 if (effort) meta.push(`effort=${effort}`);
+if (args.includes("--always-approve")) meta.push("approve=always");
 const suffix = meta.length > 0 ? ` (${meta.join(", ")})` : "";
 console.log(`Fake Grok says: ${prompt}${suffix}`);
 process.exit(0);

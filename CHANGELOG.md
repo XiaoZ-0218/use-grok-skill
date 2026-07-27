@@ -4,12 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-27
+
 ### Added
 
-- `SKILL.md` so the package can be installed as an agent skill.
+- `image` command: generate images with Grok's built-in `image_gen` tool, or edit existing images via `image_edit` with one or more `--ref` reference images. Supports `--out`, `--aspect-ratio` (`1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `auto`), `--background --wait`, `--model`, `--effort`, and `--json` (which reports the resolved `out` path and `outExists`). After the run the command verifies the `--out` file exists and is non-empty, and fails otherwise.
+- `parseArgs` now supports `multiValueOptions` for repeatable flags that collect into an array (used by `image --ref`).
+- `SKILL.md` so the package can be installed as an agent skill, with trigger coverage for image generation/editing requests ("grok 生图", "grok image", "grok imagine", etc.).
 - `review` and `critique` honor `--wait` together with `--background`: block until the run finishes and print the final result.
 - Working-tree review context now includes staged changes and untracked file contents (previously only unstaged tracked diffs, so freshly `git add`-ed files were reviewed as an empty diff).
-- Tests for `critique`, background job completion and stop, and staged/untracked review context.
+- Tests for `critique`, background job completion and stop, staged/untracked review context, the `image` command, and multi-value argument parsing.
 
 ### Fixed
 

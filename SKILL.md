@@ -1,6 +1,6 @@
 ---
 name: use-grok
-description: Delegate tasks to the Grok Build CLI (`grok`). Trigger whenever the user mentions Grok in any form — "用 grok xxx", "让 grok xxx", "grok review", "grok ask", "grok run", "grok critique", or any other request that involves Grok. When triggered, route the request to the appropriate use-grok subcommand.
+description: Delegate tasks to the Grok Build CLI (`grok`) — Q&A, code review, adversarial critique, task delegation, and image generation/editing. Trigger whenever the user mentions Grok in any form — "用 grok xxx", "让 grok xxx", "grok review", "grok ask", "grok run", "grok critique", "grok 生图", "用 grok 画一张图", "grok image", "grok imagine", or any other request that involves Grok (including generating or editing images with Grok). When triggered, route the request to the appropriate use-grok subcommand.
 ---
 
 # use-grok
@@ -17,15 +17,17 @@ Run `use-grok check --json` first. It verifies Node, the `grok` binary (override
 - `use-grok review [--scope auto|working-tree|branch] [--base <ref>]` — read-only code review. Auto scope reviews the working tree (staged, unstaged, and untracked changes) when it is dirty, otherwise the current branch against the default base branch.
 - `use-grok critique [focus...]` — adversarial ship/no-ship critique with structured findings (severity, file and line range, confidence, recommendation). Best before merging or after a large change. Extra positional words become the focus topic.
 - `use-grok run "<prompt>"` — delegate a task. Read-only by default (plan permission mode + read-only sandbox). Only pass `--write` when the user explicitly asked Grok to modify files.
+- `use-grok image "<prompt>" [--out <path>] [--aspect-ratio <ratio>] [--ref <image>...]` — generate an image with Grok's `image_gen` tool, or edit existing images with `image_edit` when `--ref` is given. The result is saved to `--out` (default `./grok-image-<timestamp>.png`). Aspect ratios: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `auto`. Unlike `run`, this command always permits Grok to write files because the image tools save output to disk.
 - `use-grok runs [run-id] [--wait]`, `use-grok show [run-id]`, `use-grok stop [run-id]` — list, wait for, inspect, and stop background runs.
 
 ## Usage patterns
 
 - Always pass `--json` when you need to act on the result, and parse stdout.
 - Run from the repository root (or pass `--cwd <dir>`) so review scope and per-workspace run state resolve to the right place.
-- For long operations use `--background`, then poll with `use-grok runs <run-id> --wait --json`, and read the output with `use-grok show <run-id> --json`. `review` and `critique` also accept `--background --wait` to block until the result is ready in one call.
+- For long operations use `--background`, then poll with `use-grok runs <run-id> --wait --json`, and read the output with `use-grok show <run-id> --json`. `review`, `critique`, and `image` also accept `--background --wait` to block until the result is ready in one call.
+- Image generation: pick `--aspect-ratio` to match the use case (`9:16` phone/story, `16:9` banner, `1:1` avatar/icon). To keep a character or style consistent across images, generate a base image first, then pass it via `--ref` for every variation. The CLI fails the command if the `--out` file is missing after the run; on success, still confirm the image content matches the request before showing or embedding it.
 - A stopped run is reported as `cancelled` and exits 1; a failed Grok invocation exits 1 with details on stderr.
 
 ## Safety
 
-`review` and `critique` never modify the repository. `run` without `--write` cannot edit files either — treat `--write` as an explicit user decision, never a default.
+`review` and `critique` never modify the repository. `run` without `--write` cannot edit files either — treat `--write` as an explicit user decision, never a default. `image` runs Grok with write permission (like `run --write`) and instructs it to write only the `--out` file, but that is prompt guidance, not a sandbox — treat `image` as write-capable and never point `--out` at files the user did not ask to create or overwrite. After an `image` run, the CLI verifies the `--out` file exists and fails the command if it does not.

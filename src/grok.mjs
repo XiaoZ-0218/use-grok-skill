@@ -333,3 +333,68 @@ export function resolveSchemaPath(name) {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(__dirname, "..", "schemas", name);
 }
+
+// ---------------------------------------------------------------------------
+// Image generation / editing via Grok Build's image tools
+// ---------------------------------------------------------------------------
+
+/**
+ * Aspect ratios accepted by the image command (subset documented for Grok's
+ * image_gen/image_edit tools).
+ */
+export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "auto"];
+
+/**
+ * Build the headless prompt that drives Grok's image_gen/image_edit tools and
+ * lands the result at a concrete path.
+ * @param {object} params
+ * @param {string} params.prompt - user-facing image description or edit instruction
+ * @param {string} params.outPath - absolute path the final image must be saved to
+ * @param {string} [params.aspectRatio]
+ * @param {string[]} [params.refs] - absolute paths of source/reference images
+ * @returns {string}
+ */
+export function buildImagePrompt({ prompt, outPath, aspectRatio, refs = [] }) {
+  const editing = refs.length > 0;
+  const tool = editing ? "image_edit" : "image_gen";
+
+  const lines = [];
+  lines.push(
+    editing
+      ? "Use the image_edit tool to transform an existing image with these parameters:"
+      : "Use the image_gen tool to generate a new image with these parameters:"
+  );
+  lines.push(`- prompt: ${prompt}`);
+  if (editing) {
+    lines.push("- image:");
+    for (const ref of refs) {
+      lines.push(`  - ${ref}`);
+    }
+  }
+  if (aspectRatio) {
+    lines.push(`- aspect_ratio: ${aspectRatio}`);
+  }
+  lines.push("");
+  lines.push("After the tool returns, copy or move the resulting image file to this exact path (create the parent directory if needed):");
+  lines.push(outPath);
+  lines.push("");
+  lines.push(`If the ${tool} tool is unavailable or the operation fails, say so plainly instead of falling back to another method. End your reply with the final saved file path on its own line.`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Run an image generation/edit task. The image tools write files, so this runs
+ * with auto-approval and no sandbox, like `run --write`.
+ * @param {string} cwd
+ * @param {string} prompt
+ * @param {object} options
+ * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
+ */
+export async function runImage(cwd, prompt, options = {}) {
+  return runHeadlessAgent(cwd, prompt, {
+    alwaysApprove: true,
+    outputFormat: "plain",
+    ...options,
+  });
+}

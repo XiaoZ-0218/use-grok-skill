@@ -6,24 +6,37 @@
  * @param {string[]} argv
  * @param {object} config
  * @param {string[]} [config.valueOptions] - flags that take a value
+ * @param {string[]} [config.multiValueOptions] - flags that take a value and may repeat; collected into an array
  * @param {string[]} [config.booleanOptions] - flags that are booleans
  * @param {Record<string,string>} [config.aliasMap] - short -> long aliases
  * @param {"positional"|"error"|"ignore"} [config.unknownMode="error"] - how to handle unknown flags
  * @returns {{
- *   flags: Record<string, string|boolean|undefined>,
+ *   flags: Record<string, string|string[]|boolean|undefined>,
  *   positionals: string[],
  *   raw: string[]
  * }}
  */
 export function parseArgs(argv, config = {}) {
   const valueOptions = new Set(config.valueOptions ?? []);
+  const multiValueOptions = new Set(config.multiValueOptions ?? []);
   const booleanOptions = new Set(config.booleanOptions ?? []);
   const aliasMap = config.aliasMap ?? {};
   const unknownMode = config.unknownMode ?? "error";
 
-  /** @type {Record<string, string|boolean|undefined>} */
+  /** @type {Record<string, string|string[]|boolean|undefined>} */
   const flags = {};
   const positionals = [];
+
+  const setFlagValue = (key, value) => {
+    if (multiValueOptions.has(key)) {
+      if (!Array.isArray(flags[key])) {
+        flags[key] = [];
+      }
+      flags[key].push(value);
+    } else {
+      flags[key] = value;
+    }
+  };
 
   let i = 0;
   while (i < argv.length) {
@@ -44,13 +57,13 @@ export function parseArgs(argv, config = {}) {
       }
 
       if (value !== undefined) {
-        flags[key] = value;
-      } else if (valueOptions.has(key)) {
+        setFlagValue(key, value);
+      } else if (valueOptions.has(key) || multiValueOptions.has(key)) {
         const next = argv[i + 1];
         if (next === undefined || next.startsWith("-")) {
           throw new Error(`Option --${key} requires a value`);
         }
-        flags[key] = next;
+        setFlagValue(key, next);
         i += 1;
       } else if (booleanOptions.has(key) || unknownMode !== "error") {
         flags[key] = true;
@@ -67,7 +80,7 @@ export function parseArgs(argv, config = {}) {
       if (chars.includes("=")) {
         const [short, value] = chars.split("=");
         const key = aliasMap[short] ?? short;
-        flags[key] = value;
+        setFlagValue(key, value);
         i += 1;
         continue;
       }
@@ -75,18 +88,18 @@ export function parseArgs(argv, config = {}) {
       for (let j = 0; j < chars.length; j += 1) {
         const short = chars[j];
         const key = aliasMap[short] ?? short;
-        if (valueOptions.has(key)) {
+        if (valueOptions.has(key) || multiValueOptions.has(key)) {
           // The rest of the cluster or the next token is the value.
           const rest = chars.slice(j + 1);
           if (rest) {
-            flags[key] = rest;
+            setFlagValue(key, rest);
             break;
           }
           const next = argv[i + 1];
           if (next === undefined || next.startsWith("-")) {
             throw new Error(`Option -${short} requires a value`);
           }
-          flags[key] = next;
+          setFlagValue(key, next);
           i += 1;
           break;
         }

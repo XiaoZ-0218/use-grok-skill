@@ -1,5 +1,6 @@
 // CLI subcommand dispatcher and orchestration for use-grok.
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import process from "node:process";
 
@@ -7,13 +8,16 @@ import { parseArgs } from "./args.mjs";
 import { ensureAbsolutePath, readJsonFile } from "./fs.mjs";
 import {
   buildReviewPrompt,
+  buildImagePrompt,
   getGrokAuthStatus,
   getGrokAvailability,
+  IMAGE_ASPECT_RATIOS,
   parseStructuredOutput,
   resolveGrokBinary,
   resolveSchemaPath,
   runAsk,
   runCritique,
+  runImage,
   runReview,
   runTask,
   schemaInstructionsFromPath,
@@ -64,6 +68,7 @@ Usage:
   use-grok review [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort <effort>] [--json]
   use-grok critique [--wait] [--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <model>] [--effort <effort>] [--json] [focus...]
   use-grok run <prompt> [--background] [--write] [--model <model>] [--effort <effort>] [--json]
+  use-grok image <prompt> [--out <path>] [--aspect-ratio <ratio>] [--ref <image>...] [--background] [--wait] [--model <model>] [--effort <effort>] [--json]
   use-grok runs [run-id] [--wait] [--all] [--timeout-ms <ms>] [--poll-interval-ms <ms>] [--json]
   use-grok show [run-id] [--json]
   use-grok stop [run-id] [--json]
@@ -136,6 +141,22 @@ function collectPrompt(positionals, flags) {
 
 function collectFocus(positionals) {
   return positionals.join(" ").trim() || undefined;
+}
+
+function normalizeAspectRatio(value) {
+  if (!value) return undefined;
+  if (IMAGE_ASPECT_RATIOS.includes(value)) {
+    return value;
+  }
+  throw new Error(
+    `Invalid aspect ratio: ${value}. Use one of: ${IMAGE_ASPECT_RATIOS.join(", ")}.`
+  );
+}
+
+function defaultImageOutPath(cwd) {
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  return ensureAbsolutePath(cwd, `grok-image-${stamp}-${suffix}.png`);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +431,110 @@ async function handleRun(args) {
   return finalJob.status === "completed" ? 0 : 1;
 }
 
+async function handleImage(args) {
+  const { flags, positionals } = parseArgs(args, {
+    valueOptions: ["out", "aspect-ratio", "model", "effort"],
+    multiValueOptions: ["ref"],
+    booleanOptions: ["background", "wait", "json"],
+  });
+  const cwd = resolveCommandCwd(flags);
+  const prompt = collectPrompt(positionals, flags);
+
+  const refs = (flags.ref ?? []).map((ref) => ensureAbsolutePath(cwd, ref));
+  for (const ref of refs) {
+    if (!fs.existsSync(ref) || !fs.statSync(ref).isFile()) {
+      throw new Error(`Reference image not found or not a file: ${ref}`);
+    }
+  }
+
+  const aspectRatio = normalizeAspectRatio(flags["aspect-ratio"]);
+  const outPath = flags.out
+    ? ensureAbsolutePath(cwd, flags.out)
+    : defaultImageOutPath(cwd);
+
+  const imagePrompt = buildImagePrompt({ prompt, outPath, aspectRatio, refs });
+  const title = `Image: ${prompt.slice(0, 60)}${prompt.length > 60 ? "..." : ""}`;
+
+  if (flags.background) {
+    const workspaceRoot = resolveCommandWorkspace(flags);
+    const job = createJobRecord(
+      {
+        kind: "image",
+        kindLabel: "image",
+        title,
+        summary: prompt.slice(0, 120),
+        out: outPath,
+        status: "queued",
+        phase: "queued",
+      },
+      { workspaceRoot, write: true, ...commonGrokOptions(flags) }
+    );
+    enqueueBackgroundJob(cwd, job, {
+      kind: "image",
+      prompt: imagePrompt,
+      options: commonGrokOptions(flags),
+    });
+    if (!flags.wait) {
+      outputResult({ queued: true, runId: job.id, out: outPath, status: "queued" }, { json: flags.json });
+      return 0;
+    }
+    const finalJob = await waitForJobTerminal(cwd, job.id);
+    return reportImageResult({ job: finalJob, outPath, runId: job.id, json: flags.json });
+  }
+
+  const workspaceRoot = resolveCommandWorkspace(flags);
+  const job = createJobRecord(
+    {
+      kind: "image",
+      kindLabel: "image",
+      title,
+      summary: prompt.slice(0, 120),
+      out: outPath,
+      status: "running",
+      phase: "running",
+    },
+    { workspaceRoot, write: true, ...commonGrokOptions(flags) }
+  );
+
+  const finalJob = await runTrackedJob(job, async () => {
+    return runImage(cwd, imagePrompt, commonGrokOptions(flags));
+  });
+
+  return reportImageResult({ job: finalJob, outPath, runId: finalJob.id, json: flags.json });
+}
+
+function imageOutExists(outPath) {
+  return fs.existsSync(outPath) && fs.statSync(outPath).size > 0;
+}
+
+/**
+ * Report an image run result honestly: a completed Grok process is not enough,
+ * the --out file must actually exist and be non-empty.
+ */
+function reportImageResult({ job, outPath, runId, json }) {
+  const rawOutput = job.result?.rawOutput ?? "";
+  const outExists = imageOutExists(outPath);
+  const ok = job.status === "completed" && outExists;
+
+  if (job.status === "completed" && !outExists) {
+    process.stderr.write(`Warning: Grok reported success but no image file was found at ${outPath}\n`);
+  }
+
+  if (json) {
+    outputResult(
+      { status: ok ? 0 : 1, runId, out: outPath, outExists, output: rawOutput.trim() },
+      { json: true }
+    );
+  } else {
+    process.stdout.write(renderTaskResult(job.result ?? rawOutput));
+    if (outExists) {
+      process.stdout.write(`\nSaved: ${outPath}\n`);
+    }
+  }
+
+  return ok ? 0 : 1;
+}
+
 async function handleRuns(args) {
   const { flags, positionals } = parseArgs(args, {
     valueOptions: ["timeout-ms", "poll-interval-ms"],
@@ -533,6 +658,8 @@ async function handleRunWorker(args) {
       result = await runReview(cwd, request.prompt, request.options);
     } else if (request.kind === "critique") {
       result = await runCritique(cwd, request.prompt, request.options);
+    } else if (request.kind === "image") {
+      result = await runImage(cwd, request.prompt, request.options);
     } else {
       result = await runTask(cwd, request.prompt, request.options);
     }
@@ -669,6 +796,8 @@ export async function main(argv) {
         return await handleCritique(subArgs);
       case "run":
         return await handleRun(subArgs);
+      case "image":
+        return await handleImage(subArgs);
       case "runs":
         return await handleRuns(subArgs);
       case "show":

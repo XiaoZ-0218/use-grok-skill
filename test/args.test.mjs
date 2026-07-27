@@ -44,6 +44,20 @@ describe("parseArgs", () => {
       parseArgs(["--model"], { valueOptions: ["model"] });
     }, /requires a value/);
   });
+
+  it("collects repeated multi value options into an array", () => {
+    const result = parseArgs(["--ref", "a.png", "--ref=b.png", "prompt"], {
+      multiValueOptions: ["ref"],
+    });
+    assert.deepStrictEqual(result.flags.ref, ["a.png", "b.png"]);
+    assert.deepStrictEqual(result.positionals, ["prompt"]);
+  });
+
+  it("throws on missing value for multi value option", () => {
+    assert.throws(() => {
+      parseArgs(["--ref"], { multiValueOptions: ["ref"] });
+    }, /requires a value/);
+  });
 });
 
 describe("splitRawArgumentString", () => {
